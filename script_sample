@@ -1,0 +1,78 @@
+# ターミナルからスクリプトを実行したときの実行例
+
+$ ./llm-agent-man.sh 
+========================================================================
+           LLM Agents & Tools Status & Version Inspector                
+========================================================================
+
+[ Systemd Services ]
+  ollama: ● ACTIVE (Running)
+  llama-server: Not Registered
+  lemonade-server: Not Registered
+
+[ Installed CLI Agents, Versions & Status ]
+Agent/Tool      Installed?   Current      Latest / Update status              Running Process
+------------------------------------------------------------------------
+qwen            Yes       0.25.2          No update reported       ○ Inactive
+mimo            Yes       Unknown         0.1.15 (Updatable)       ○ Inactive
+cline           Yes       3.0.71          No update reported       ○ Inactive
+continue        Yes       Unknown         --                       ○ Inactive
+hf              Yes       2.2.0           Not checked (pipx)       ○ Inactive
+tiny-agents     Yes       Unknown         Not checked (pipx)       ○ Inactive
+llama           Yes       0.6.0           --                       ○ Inactive
+
+[ Local LLM API Endpoints ]
+  Ollama API (http://127.0.0.1:11434/): ● Responding
+  llama.cpp / llama-server (http://127.0.0.1:8080/health): ○ No Response
+
+[ Control Commands for Detected Items ]
+------------------------------------------------------------------------
+• System service: ollama
+  - 開始:   sudo systemctl start ollama
+  - 停止:   sudo systemctl stop ollama
+  - 再起動: sudo systemctl restart ollama
+  - 状態:   sudo systemctl status ollama
+
+• CLI Tool: qwen
+  - 起動/実行: qwen
+  - 強制停止:   pkill -x qwen
+
+• CLI Tool: mimo
+  - 起動/実行: mimo
+  - 強制停止:   pkill -x mimo
+
+• CLI Tool: cline
+  - 起動/実行: cline
+  - 強制停止:   pkill -x cline
+
+• CLI Tool: continue
+  - 起動/実行: continue
+  - 強制停止:   pkill -x continue
+
+• CLI Tool: hf
+  - 起動/実行: hf
+  - 強制停止:   pkill -x hf
+
+• CLI Tool: tiny-agents
+  - 起動/実行: tiny-agents
+  - 強制停止:   pkill -x tiny-agents
+
+• CLI Tool: llama
+  - 起動/実行: llama
+  - 強制停止:   pkill -x llama
+
+========================================================================
+以下のアップデートが見つかりました:
+  -> npm install -g @mimo-ai/cli@latest
+========================================================================
+今すぐこれらのアップデートを適用しますか？ (y/N): y
+
+アップデートを実行しています...
+Executing: npm install -g @mimo-ai/cli@latest
+
+
+changed 5 packages in 17s
+すべてのアップデートが完了しました！
+========================================================================
+$ 
+$
