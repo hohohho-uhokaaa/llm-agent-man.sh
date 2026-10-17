@@ -7,7 +7,7 @@
 - Ollama、llama-server、lemonade-server の systemd サービス状態を確認します。
 - 指定した CLI ツールのインストール状況、バージョン、プロセス実行状況を表示します。
 - npm で管理されている CLI の更新候補を調べ、確認後に更新できます。
-- Ollama と llama.cpp のローカル API エンドポイントを確認します。
+- Ollama、llama.cpp、Lemonade のローカル API エンドポイントを確認し、HTTP 200 の場合は取得可能なサーバーバージョンを表示します。
 - 検出したサービスや CLI の操作コマンドを表示します。
 
 ## 対象ツール
@@ -45,6 +45,7 @@ bash llm-agent-man.sh
 - pipx 管理の CLI は更新確認を行わず、「Not checked (pipx)」として扱います。最新版とは表示しません。
 - npm パッケージの `bin` 定義から CLI 名との対応が一意に特定できない場合、npm パッケージとして更新確認できません。
 - CLI のバージョン表示形式はツールごとに異なるため、バージョンを抽出できない場合は `Unknown` と表示されます。
+- API の稼働確認には Ollama `/`、llama.cpp `/health`、Lemonade `/` を使います。HTTP 200 のとき、Ollama `/api/version`、llama.cpp `/props`、Lemonade `/api/version` からバージョンを取得します。バージョン情報が取得できない場合も、API の応答状態は別に表示します。
 - 強制停止コマンドは表示のみで、自動実行しません。実行する場合は対象プロセスを確認してください。
 
 ## 作成経緯

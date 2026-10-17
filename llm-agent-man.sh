@@ -176,15 +176,56 @@ echo -e "${YELLOW}[ Local LLM API Endpoints ]${NC}"
 check_endpoint() {
     local name=$1
     local url=$2
-    if curl --fail --silent --connect-timeout 1 --max-time 3 "$url" > /dev/null 2>&1; then
-        echo -e "  $name ($url): ${GREEN}● Responding${NC}"
+    local version_url=$3
+    local version_key=$4
+    local status
+    local version
+
+    status=$(curl --silent --connect-timeout 1 --max-time 3 --output /dev/null \
+        --write-out '%{http_code}' "$url" 2>/dev/null || true)
+    if [ "$status" = "200" ]; then
+        version=$(get_endpoint_version "$version_url" "$version_key" || true)
+        if [ -n "$version" ]; then
+            echo -e "  $name ($url): ${GREEN}● Responding (Version: $version)${NC}"
+        else
+            echo -e "  $name ($url): ${GREEN}● Responding${NC} (Version unavailable)"
+        fi
     else
-        echo -e "  $name ($url): ${RED}○ No Response${NC}"
+        echo -e "  $name ($url): ${RED}○ No Response (HTTP ${status:-000})${NC}"
     fi
 }
 
-check_endpoint "Ollama API" "http://127.0.0.1:11434/"
-check_endpoint "llama.cpp / llama-server" "http://127.0.0.1:8080/health"
+get_endpoint_version() {
+    local url=$1
+    local json_key=$2
+    local response
+    local status
+    local body
+
+    command -v python3 >/dev/null 2>&1 || return 1
+    response=$(curl --silent --connect-timeout 1 --max-time 3 \
+        --write-out $'\n%{http_code}' "$url" 2>/dev/null) || return 1
+    status=${response##*$'\n'}
+    [ "$status" = "200" ] || return 1
+    body=${response%$'\n'*}
+
+    python3 -c '
+import json
+import re
+import sys
+
+try:
+    value = json.loads(sys.argv[2]).get(sys.argv[1])
+except (json.JSONDecodeError, AttributeError):
+    sys.exit(1)
+if value is not None and not isinstance(value, (dict, list)):
+    print(re.sub(r"[\x00-\x1f\x7f]", "", str(value))[:128])
+' "$json_key" "$body" 2>/dev/null
+}
+
+check_endpoint "Ollama API" "http://127.0.0.1:11434/" "http://127.0.0.1:11434/api/version" "version"
+check_endpoint "Llama.cpp" "http://127.0.0.1:8080/health" "http://127.0.0.1:8080/props" "build_info"
+check_endpoint "Lemonade API" "http://127.0.0.1:13305" "http://127.0.0.1:13305/api/version" "version"
 echo ""
 
 # 4. 検出したサービスの種類と CLI に応じた操作コマンドを案内する
