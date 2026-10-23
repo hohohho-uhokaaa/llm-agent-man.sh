@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 
-# 表示に使用する色コードを定義する
+# 画面表示で使う色コードを定義する
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-# 状態やバージョンを確認する CLI ツールと systemd サービスを列挙する
+# 状態・バージョンを確認する CLI ツールと systemd サービスを列挙する
 CLI_TARGETS=("qwen" "mimo" "cline" "continue" "aider" "claude" "hf" "tiny-agents" "llama" "unsloth")
-SERVICE_TARGETS=("ollama" "llama-server" "lemonade-server")
+SERVICE_TARGETS=("ollama" "llama-server" "lemond")
 
 # スクリプトのタイトルを色付きで表示する
 echo -e "${CYAN}========================================================================${NC}"
 echo -e "${CYAN}           LLM Agents & Tools Status & Version Inspector                ${NC}"
 echo -e "${CYAN}========================================================================${NC}\n"
 
-# 1. 対象サービスがシステムまたはユーザー単位で稼働中か、登録済みかを確認する
+# 1. 対象サービスが system/user のどちらで稼働中か、または登録済みかを確認する
 echo -e "${YELLOW}[ Systemd Services ]${NC}"
 FOUND_SERVICES=()
 for svc in "${SERVICE_TARGETS[@]}"; do
@@ -44,13 +44,14 @@ echo -e "${YELLOW}[ Installed CLI Agents, Versions & Status ]${NC}"
 printf "%-15s %-12s %-12s %-35s %-15s\n" "Agent/Tool" "Installed?" "Current" "Latest / Update status" "Running Process"
 echo "------------------------------------------------------------------------"
 
+# 後続の操作案内と更新処理で使う検出結果を配列に保持する
 FOUND_CLIS=()
 UPDATE_COMMANDS=()
 UPDATE_TYPES=()
 UPDATE_PACKAGES=()
 UPDATE_UNCHECKED=()
 
-# npm のグローバルパッケージ一覧と更新情報をまとめて取得する
+# npm の問い合わせを各 CLI ごとに繰り返さないよう、一覧と更新情報を先に取得する
 npm_global_json=""
 npm_global_root=""
 npm_outdated_json=""
@@ -65,7 +66,7 @@ if command -v npm &> /dev/null; then
     fi
 fi
 
-# npm パッケージの bin 定義を調べ、CLI 名に一致するパッケージ名を返す
+# npm パッケージの bin 定義から、指定した CLI を提供するパッケージ名を特定する
 find_npm_package_for_command() {
     local command_name=$1
     [ -n "$npm_global_json" ] && [ -n "$npm_global_root" ] || return 1
@@ -92,7 +93,7 @@ find_npm_package_for_command() {
     ' "$npm_global_json" "$npm_global_root" "$command_name" 2>/dev/null
 }
 
-# npm outdated の JSON から指定パッケージの最新バージョンを取得する
+# npm outdated の JSON から指定パッケージの最新バージョンを取り出す
 find_npm_latest_version() {
     local package_name=$1
     [ -n "$npm_outdated_json" ] || return 1
@@ -105,14 +106,12 @@ find_npm_latest_version() {
     ' "$npm_outdated_json" "$package_name" 2>/dev/null
 }
 
+# インストール済み CLI を調べ、現在のバージョン・更新状況・実行状態を表示する
 for cmd in "${CLI_TARGETS[@]}"; do
-    cmd_path=$(command -v "$cmd" 2>/dev/null)
-    if [ -n "$cmd_path" ]; then
-        inst_status="${GREEN}Yes${NC}"
-        FOUND_CLIS+=("$cmd")
-    else
+    if ! command -v "$cmd" >/dev/null 2>&1; then
         continue
     fi
+    FOUND_CLIS+=("$cmd")
 
     # --version、次に -v を試し、出力からセマンティックバージョンを抽出する
     curr_ver=$("$cmd" --version 2>/dev/null | head -n 1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1)
@@ -126,7 +125,7 @@ for cmd in "${CLI_TARGETS[@]}"; do
     is_outdated=false
     update_checked=false
 
-    # npm パッケージの判定
+    # npm 管理の CLI は更新情報を照合し、更新候補だけ実行用配列に記録する
     pkg_name=$(find_npm_package_for_command "$cmd")
     if [ -n "$pkg_name" ] && [ "$npm_outdated_valid" = true ]; then
         latest_ver=$(find_npm_latest_version "$pkg_name")
@@ -148,6 +147,7 @@ for cmd in "${CLI_TARGETS[@]}"; do
         UPDATE_UNCHECKED+=("$cmd")
     fi
 
+    # 更新情報の有無に応じて表示文言と色を決める
     if [ "$update_checked" = true ] && [ -z "$latest_ver" ]; then
         latest_ver="No update reported"
     fi
@@ -160,18 +160,18 @@ for cmd in "${CLI_TARGETS[@]}"; do
         lat_display="${GREEN}$latest_ver${NC}"
     fi
 
-    # コマンド名との完全一致でプロセスの有無を確認する
+    # プロセス名を完全一致で検索し、稼働状態を表示する
     if pgrep -x -- "$cmd" > /dev/null 2>&1; then
         run_status="${GREEN}● Running${NC}"
     else
         run_status="${RED}○ Inactive${NC}"
     fi
 
-    printf "%-15s %-20b %-15s %-35b %-20b\n" "$cmd" "$inst_status" "$curr_ver" "$lat_display" "$run_status"
+    printf "%-15s %-20b %-15s %-35b %-20b\n" "$cmd" "${GREEN}Yes${NC}" "$curr_ver" "$lat_display" "$run_status"
 done
 echo ""
 
-# 3. ローカル LLM API の HTTP 応答を制限時間付きで確認する
+# 3. ローカル LLM API に制限時間付きで接続し、応答とバージョンを確認する
 echo -e "${YELLOW}[ Local LLM API Endpoints ]${NC}"
 check_endpoint() {
     local name=$1
@@ -181,6 +181,7 @@ check_endpoint() {
     local status
     local version
 
+    # HTTP 200 の場合だけ詳細バージョンを取得し、応答状態を表示する
     status=$(curl --silent --connect-timeout 1 --max-time 3 --output /dev/null \
         --write-out '%{http_code}' "$url" 2>/dev/null || true)
     if [ "$status" = "200" ]; then
@@ -195,6 +196,7 @@ check_endpoint() {
     fi
 }
 
+# JSON 応答から指定キーの値を安全に取り出し、表示可能な長さに整える
 get_endpoint_version() {
     local url=$1
     local json_key=$2
@@ -214,6 +216,7 @@ import json
 import re
 import sys
 
+# 予期しない HTTP 応答や JSON 形式では、バージョンを取得できなかったものとして扱う
 try:
     value = json.loads(sys.argv[2]).get(sys.argv[1])
 except (json.JSONDecodeError, AttributeError):
@@ -224,14 +227,15 @@ if value is not None and not isinstance(value, (dict, list)):
 }
 
 check_endpoint "Ollama API" "http://127.0.0.1:11434/" "http://127.0.0.1:11434/api/version" "version"
-check_endpoint "Llama.cpp" "http://127.0.0.1:8080/health" "http://127.0.0.1:8080/props" "build_info"
+check_endpoint "Llama.cpp" "http://127.0.0.1:9931/health" "http://127.0.0.1:9931/props" "build_info"
 check_endpoint "Lemonade API" "http://127.0.0.1:13305" "http://127.0.0.1:13305/api/version" "version"
 echo ""
 
-# 4. 検出したサービスの種類と CLI に応じた操作コマンドを案内する
+# 4. 検出したサービスの実行スコープに合わせて操作コマンドを案内する
 echo -e "${YELLOW}[ Control Commands for Detected Items ]${NC}"
 echo "------------------------------------------------------------------------"
 
+# systemd サービスは登録元に合った systemctl コマンドを提示する
 for service in "${FOUND_SERVICES[@]}"; do
     scope=${service%%:*}
     svc=${service#*:}
@@ -249,6 +253,7 @@ for service in "${FOUND_SERVICES[@]}"; do
     echo ""
 done
 
+# CLI は起動方法と、プロセス名を指定した停止方法を提示する
 for cmd in "${FOUND_CLIS[@]}"; do
     echo -e "${CYAN}• CLI Tool: $cmd${NC}"
     echo -e "  - 起動/実行: ${YELLOW}$cmd${NC}"
@@ -256,7 +261,7 @@ for cmd in "${FOUND_CLIS[@]}"; do
     echo ""
 done
 
-# 5. npm の更新候補を表示し、利用者の確認後に個別に更新する
+# 5. npm の更新候補を表示し、利用者の同意があった場合だけ適用する
 if [ ${#UPDATE_COMMANDS[@]} -gt 0 ]; then
     echo -e "${CYAN}========================================================================${NC}"
     echo -e "${YELLOW}以下のアップデートが見つかりました:${NC}"
@@ -264,12 +269,12 @@ if [ ${#UPDATE_COMMANDS[@]} -gt 0 ]; then
         echo -e "  -> ${CYAN}$u_cmd${NC}"
     done
     echo -e "${CYAN}========================================================================${NC}"
-    
+
     read -p "今すぐこれらのアップデートを適用しますか？ (y/N): " -n 1 -r
     echo ""
     if [[ $REPLY =~ ^[Yy]$ ]]; then
         echo -e "\n${YELLOW}アップデートを実行しています...${NC}"
-        # 登録した更新情報を使って実行し、失敗件数を集計する
+        # 表示用のコマンド文字列ではなく保存したパッケージ名を使って更新し、失敗数を集計する
         update_failures=0
         for i in "${!UPDATE_COMMANDS[@]}"; do
             echo -e "${CYAN}Executing: ${UPDATE_COMMANDS[$i]}${NC}"
@@ -289,6 +294,7 @@ if [ ${#UPDATE_COMMANDS[@]} -gt 0 ]; then
             echo -e "${RED}${update_failures} 件のアップデートに失敗しました。${NC}"
         fi
     else
+        # 明示的に y/Y が選ばれなければ、更新を行わず終了する
         echo -e "アップデートをスキップしました。"
     fi
 else
