@@ -349,4 +349,40 @@ else
     fi
 fi
 
+LLAMA_CPP_REPO="/home/tomjerry/Projects/Sources/llama.cpp"
+echo ""
+echo -e "${YELLOW}[ llama.cpp Source Update ]${NC}"
+if [ ! -d "$LLAMA_CPP_REPO/.git" ]; then
+    echo -e "${RED}Git リポジトリが見つかりません: $LLAMA_CPP_REPO${NC}"
+else
+    read -p "llama.cpp を git pull で更新しますか？ (y/N): " -n 1 -r
+    echo ""
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        if ! llama_cpp_version_before=$(git -C "$LLAMA_CPP_REPO" describe --tags); then
+            echo -e "${RED}更新前の llama.cpp バージョンを取得できませんでした。${NC}"
+        else
+            echo -e "更新前の llama.cpp バージョン: ${CYAN}$llama_cpp_version_before${NC}"
+            if git -C "$LLAMA_CPP_REPO" pull; then
+                if llama_cpp_version_after=$(git -C "$LLAMA_CPP_REPO" describe --tags); then
+                    echo -e "更新後の llama.cpp バージョン: ${CYAN}$llama_cpp_version_after${NC}"
+                    if [ "$llama_cpp_version_before" = "$llama_cpp_version_after" ]; then
+                        echo -e "${YELLOW}llama.cpp のバージョンに変化はありません。${NC}"
+                    else
+                        echo -e "${GREEN}llama.cpp のバージョンが更新されました。${NC}"
+                        llama_cpp_build_script="$(dirname -- "${BASH_SOURCE[0]}")/update-and-build-llama-cpp.sh"
+                        echo -e "ビルドする場合は次のコマンドを実行してください:"
+                        echo -e "${CYAN}bash \"$llama_cpp_build_script\" --build-current${NC}"
+                    fi
+                else
+                    echo -e "${RED}更新後の llama.cpp バージョンを取得できませんでした。${NC}"
+                fi
+            else
+                echo -e "${RED}llama.cpp の git pull に失敗しました。${NC}"
+            fi
+        fi
+    else
+        echo -e "llama.cpp の更新をスキップしました。"
+    fi
+fi
+
 echo -e "${CYAN}========================================================================${NC}"

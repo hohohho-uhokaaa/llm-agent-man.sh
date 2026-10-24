@@ -44,12 +44,28 @@ bash llm-agent-man.sh
 
 - npm の更新は `npm outdated -g --json` で報告された候補のみを表示します。更新の実行前に確認を求めます。
 - `llama` はソースビルドを想定し、このスクリプトからの自動更新対象外として表示します。更新する場合は使用している clone/build 手順で管理してください。
+- llama.cpp の更新と、タグバージョンが変わった場合の HIP ビルドは `update-and-build-llama-cpp.sh` で個別に実行できます。`llm-agent-man.sh` からは呼び出されません。
 - pipx 管理の CLI は更新確認を行わず、「Not checked (pipx)」として扱います。最新版とは表示しません。
 - npm パッケージの `bin` 定義から CLI 名との対応が一意に特定できない場合、npm パッケージとして更新確認できません。
 - CLI のバージョン表示形式はツールごとに異なるため、バージョンを抽出できない場合は `Unknown` と表示されます。
 - API の稼働確認には Ollama `/`、llama.cpp `/health`、Lemonade `/` を使います。HTTP 200 のとき、Ollama `/api/version`、llama.cpp `/props`、Lemonade `/api/version` からバージョンを取得します。バージョン情報が取得できない場合も、API の応答状態は別に表示します。
 - llama.cpp の GitHub バージョンは GitHub Releases API の最新安定版リリースタグです。通信できない場合は `Unavailable` と表示されます。
 - 強制停止コマンドは表示のみで、自動実行しません。実行する場合は対象プロセスを確認してください。
+
+## llama.cpp の更新とビルド
+
+```bash
+./update-and-build-llama-cpp.sh
+```
+
+スクリプトは `/home/tomjerry/Projects/Sources/llama.cpp` で `git pull` を実行し、`git describe --tags` の結果が変わった場合だけ既存の `build` ディレクトリを削除して HIP 向けに再構成・ビルドします。ビルド並列数は 2 に制限しています。
+`llm-agent-man.sh` 側で `git pull` を実行してバージョンが変わった場合は、更新済みソースをビルドするコマンドとして次を表示します。
+
+```bash
+./update-and-build-llama-cpp.sh --build-current
+```
+
+`--build-current` は追加の `git pull` をせず、現在のチェックアウトをビルドします。
 
 ## 作成経緯
 
