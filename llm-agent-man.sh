@@ -9,7 +9,7 @@ NC='\033[0m' # No Color
 
 # 状態・バージョンを確認する CLI ツールと systemd サービスを列挙する
 CLI_TARGETS=("qwen" "mimo" "cline" "continue" "aider" "claude" "hf" "tiny-agents" "llama" "unsloth")
-SERVICE_TARGETS=("ollama" "llama-server" "lemond")
+SERVICE_TARGETS=("ollama" "llama-server" "lemond" )
 
 # スクリプトのタイトルを色付きで表示する
 echo -e "${CYAN}========================================================================${NC}"
@@ -125,26 +125,30 @@ for cmd in "${CLI_TARGETS[@]}"; do
     is_outdated=false
     update_checked=false
 
-    # npm 管理の CLI は更新情報を照合し、更新候補だけ実行用配列に記録する
-    pkg_name=$(find_npm_package_for_command "$cmd")
-    if [ -n "$pkg_name" ] && [ "$npm_outdated_valid" = true ]; then
-        latest_ver=$(find_npm_latest_version "$pkg_name")
-        update_checked=true
-        if [ -n "$latest_ver" ]; then
-            is_outdated=true
-            UPDATE_COMMANDS+=("npm install -g $pkg_name@latest")
-            UPDATE_TYPES+=("npm")
-            UPDATE_PACKAGES+=("$pkg_name")
-        else
-            latest_ver="No update reported"
-        fi
-    # pipx 管理かを確認するが、出力形式による誤判定を避けるため更新確認対象外として示す
-    elif command -v pipx >/dev/null 2>&1 && pipx list --json 2>/dev/null |
-         python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if any(sys.argv[1] in v.get("metadata",{}).get("main_package",{}).get("apps",[]) or n == sys.argv[1] for n,v in d.get("venvs",{}).items()) else 1)' "$cmd" 2>/dev/null; then
-        latest_ver="Not checked (pipx)"
-        UPDATE_UNCHECKED+=("$cmd")
+    pkg_name=""
+    if [ "$cmd" = "llama" ]; then
+        latest_ver="Source build (manual update)"
     else
-        UPDATE_UNCHECKED+=("$cmd")
+        pkg_name=$(find_npm_package_for_command "$cmd")
+        if [ -n "$pkg_name" ] && [ "$npm_outdated_valid" = true ]; then
+            latest_ver=$(find_npm_latest_version "$pkg_name")
+            update_checked=true
+            if [ -n "$latest_ver" ]; then
+                is_outdated=true
+                UPDATE_COMMANDS+=("npm install -g $pkg_name@latest")
+                UPDATE_TYPES+=("npm")
+                UPDATE_PACKAGES+=("$pkg_name")
+            else
+                latest_ver="No update reported"
+            fi
+        # pipx 管理かを確認するが、出力形式による誤判定を避けるため更新確認対象外として示す
+        elif command -v pipx >/dev/null 2>&1 && pipx list --json 2>/dev/null |
+             python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if any(sys.argv[1] in v.get("metadata",{}).get("main_package",{}).get("apps",[]) or n == sys.argv[1] for n,v in d.get("venvs",{}).items()) else 1)' "$cmd" 2>/dev/null; then
+            latest_ver="Not checked (pipx)"
+            UPDATE_UNCHECKED+=("$cmd")
+        else
+            UPDATE_UNCHECKED+=("$cmd")
+        fi
     fi
 
     # 更新情報の有無に応じて表示文言と色を決める
@@ -154,7 +158,8 @@ for cmd in "${CLI_TARGETS[@]}"; do
 
     if [ "$is_outdated" = true ]; then
         lat_display="${YELLOW}$latest_ver (Updatable)${NC}"
-    elif [ "$latest_ver" = "Not checked (pipx)" ]; then
+    elif [ "$latest_ver" = "Not checked (pipx)" ] ||
+         [ "$latest_ver" = "Source build (manual update)" ]; then
         lat_display="${YELLOW}$latest_ver${NC}"
     else
         lat_display="${GREEN}$latest_ver${NC}"
@@ -226,8 +231,45 @@ if value is not None and not isinstance(value, (dict, list)):
 ' "$json_key" "$body" 2>/dev/null
 }
 
+get_github_latest_release() {
+    local response
+    local status
+    local body
+
+    command -v python3 >/dev/null 2>&1 || return 1
+    response=$(curl --silent --connect-timeout 2 --max-time 5 \
+        --header 'Accept: application/vnd.github+json' \
+        --header 'X-GitHub-Api-Version: 2022-11-28' \
+        --write-out $'\n%{http_code}' \
+        "https://api.github.com/repos/ggml-org/llama.cpp/releases/latest" 2>/dev/null) || return 1
+    status=${response##*$'\n'}
+    [ "$status" = "200" ] || return 1
+    body=${response%$'\n'*}
+
+    python3 -c '
+import json
+import re
+import sys
+
+try:
+    tag = json.loads(sys.argv[1]).get("tag_name")
+except (json.JSONDecodeError, AttributeError):
+    sys.exit(1)
+if isinstance(tag, str) and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._+-]{0,127}", tag):
+    print(tag)
+else:
+    sys.exit(1)
+' "$body" 2>/dev/null
+}
+
 check_endpoint "Ollama API" "http://127.0.0.1:11434/" "http://127.0.0.1:11434/api/version" "version"
 check_endpoint "Llama.cpp" "http://127.0.0.1:9931/health" "http://127.0.0.1:9931/props" "build_info"
+llama_cpp_latest=$(get_github_latest_release || true)
+if [ -n "$llama_cpp_latest" ]; then
+    echo -e "  Llama.cpp latest GitHub release: ${GREEN}$llama_cpp_latest${NC}"
+else
+    echo -e "  Llama.cpp latest GitHub release: ${YELLOW}Unavailable${NC}"
+fi
 check_endpoint "Lemonade API" "http://127.0.0.1:13305" "http://127.0.0.1:13305/api/version" "version"
 echo ""
 
