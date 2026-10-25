@@ -44,7 +44,7 @@ bash llm-agent-man.sh
 
 - npm の更新は `npm outdated -g --json` で報告された候補のみを表示します。更新の実行前に確認を求めます。
 - `llama` はソースビルドを想定し、このスクリプトからの自動更新対象外として表示します。更新する場合は使用している clone/build 手順で管理してください。
-- llama.cpp の更新と、タグバージョンが変わった場合の HIP ビルドは `update-and-build-llama-cpp.sh` で個別に実行できます。`llm-agent-man.sh` からは呼び出されません。
+- llama.cpp は、作業ツリーに未コミット変更がなく、追跡先リモートが fast-forward 可能な場合に `llm-agent-man.sh` が更新します。更新後のビルド・インストールは `update-and-build-llama-cpp.sh` で行います。
 - pipx 管理の CLI は更新確認を行わず、「Not checked (pipx)」として扱います。最新版とは表示しません。
 - npm パッケージの `bin` 定義から CLI 名との対応が一意に特定できない場合、npm パッケージとして更新確認できません。
 - CLI のバージョン表示形式はツールごとに異なるため、バージョンを抽出できない場合は `Unknown` と表示されます。
@@ -52,21 +52,18 @@ bash llm-agent-man.sh
 - llama.cpp の GitHub バージョンは GitHub Releases API の最新安定版リリースタグです。通信できない場合は `Unavailable` と表示されます。
 - 強制停止コマンドは表示のみで、自動実行しません。実行する場合は対象プロセスを確認してください。
 
-## llama.cpp の更新とビルド
+## llama.cpp のビルドとインストール
 
 ```bash
 ./update-and-build-llama-cpp.sh
 ```
 
-スクリプトは `/home/tomjerry/Projects/Sources/llama.cpp` で `git pull` を実行し、`git describe --tags` の結果が変わった場合だけ既存の `build` ディレクトリを削除して HIP 向けに再構成・ビルドします。ビルド並列数は 2 に制限しています。
-`llm-agent-man.sh` 側で `git pull` を実行してバージョンが変わった場合は、更新済みソースをビルドするコマンドとして次を表示します。
+このスクリプトは `/home/tomjerry/Projects/Sources/llama.cpp` の現在のソースを HIP（`gfx902`）向けに構成・ビルドし、`/home/tomjerry/.local` にインストールします。既存の `build` ディレクトリは作り直し、ビルド並列数は 2 に制限します。Git の更新は行いません。
 
-```bash
-./update-and-build-llama-cpp.sh --build-current
-```
-
-`--build-current` は追加の `git pull` をせず、現在のチェックアウトをビルドします。
+`llm-agent-man.sh` が llama.cpp を更新した場合は、このスクリプトを実行するコマンドを表示します。更新とビルド・インストールは別々に行われるため、ビルド完了まで `llm-agent-man.sh` の実行を待つ必要はありません。
 
 ## 作成経緯
 
 Google Gemini が提示した Bash シェルスクリプトを、vscode の Copilot お試し GPT 6 Luna で修正して仕上げました。以降のスクリプト修正作業は、vscode から Copilot の無料枠を利用して行いました。
+
+Copilot に相談しながら修正を重ねていたら、自宅 PC の状態チェック用だったはずのスクリプトが、いつの間にか llama.cpp のリポジトリ更新を気にかけすぎる存在に。便利にはなったものの、「うちの PC の状態チェック、どこへ行った？」と少し違和感を覚えています。

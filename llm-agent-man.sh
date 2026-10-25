@@ -353,37 +353,44 @@ fi
 LLAMA_CPP_REPO="/home/tomjerry/Projects/Sources/llama.cpp"
 echo ""
 echo -e "${YELLOW}[ llama.cpp Source Update ]${NC}"
-# llama.cpp の更新を利用者に確認し、タグが変わった場合は別スクリプトでのビルド方法を案内する
+# llama.cpp のリモート状態を確認し、安全に fast-forward できる場合だけ更新する
 if [ ! -d "$LLAMA_CPP_REPO/.git" ]; then
     echo -e "${RED}Git リポジトリが見つかりません: $LLAMA_CPP_REPO${NC}"
 else
-    read -p "llama.cpp を git pull で更新しますか？ (y/N): " -n 1 -r
-    echo ""
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        if ! llama_cpp_version_before=$(git -C "$LLAMA_CPP_REPO" describe --tags); then
-            echo -e "${RED}更新前の llama.cpp バージョンを取得できませんでした。${NC}"
+    llama_cpp_version_before=""
+    if [ -n "$(git -C "$LLAMA_CPP_REPO" status --porcelain)" ]; then
+        echo -e "${YELLOW}ローカルに未コミットの変更があるため、llama.cpp の更新をスキップしました。${NC}"
+    elif ! llama_cpp_upstream=$(git -C "$LLAMA_CPP_REPO" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null); then
+        echo -e "${RED}追跡先ブランチが設定されていないため、llama.cpp の更新を確認できません。${NC}"
+    elif ! git -C "$LLAMA_CPP_REPO" fetch --quiet; then
+        echo -e "${RED}リモートの llama.cpp 状態を取得できませんでした。更新をスキップしました。${NC}"
+    else
+        if ! llama_cpp_version_before=$(git -C "$LLAMA_CPP_REPO" describe --tags --always HEAD) ||
+           ! llama_cpp_version_remote=$(git -C "$LLAMA_CPP_REPO" describe --tags --always "$llama_cpp_upstream"); then
+            echo -e "${RED}llama.cpp のローカルまたはリモートのバージョンを取得できませんでした。${NC}"
         else
-            echo -e "更新前の llama.cpp バージョン: ${CYAN}$llama_cpp_version_before${NC}"
-            if git -C "$LLAMA_CPP_REPO" pull; then
-                if llama_cpp_version_after=$(git -C "$LLAMA_CPP_REPO" describe --tags); then
-                    echo -e "更新後の llama.cpp バージョン: ${CYAN}$llama_cpp_version_after${NC}"
-                    if [ "$llama_cpp_version_before" = "$llama_cpp_version_after" ]; then
-                        echo -e "${YELLOW}llama.cpp のバージョンに変化はありません。${NC}"
-                    else
-                        echo -e "${GREEN}llama.cpp のバージョンが更新されました。${NC}"
-                        llama_cpp_build_script="$(dirname -- "${BASH_SOURCE[0]}")/update-and-build-llama-cpp.sh"
-                        echo -e "ビルドする場合は次のコマンドを実行してください:"
-                        echo -e "${CYAN}bash \"$llama_cpp_build_script\" --build-current${NC}"
-                    fi
-                else
-                    echo -e "${RED}更新後の llama.cpp バージョンを取得できませんでした。${NC}"
-                fi
+            echo -e "ローカルの llama.cpp バージョン: ${CYAN}$llama_cpp_version_before${NC}"
+            echo -e "リモートの llama.cpp バージョン: ${CYAN}$llama_cpp_version_remote${NC}"
+            if ! llama_cpp_commit_counts=$(git -C "$LLAMA_CPP_REPO" rev-list --left-right --count "HEAD...$llama_cpp_upstream"); then
+                echo -e "${RED}ローカルとリモートの状態を比較できませんでした。${NC}"
             else
-                echo -e "${RED}llama.cpp の git pull に失敗しました。${NC}"
+                read -r llama_cpp_local_ahead llama_cpp_remote_ahead <<< "$llama_cpp_commit_counts"
+                if [ "$llama_cpp_remote_ahead" -eq 0 ]; then
+                    echo -e "${GREEN}リモートに新しいコミットはありません。${NC}"
+                elif [ "$llama_cpp_local_ahead" -ne 0 ]; then
+                    echo -e "${YELLOW}ローカルとリモートの履歴が分岐しているため、安全のため更新をスキップしました。${NC}"
+                elif ! git -C "$LLAMA_CPP_REPO" merge-base --is-ancestor HEAD "$llama_cpp_upstream"; then
+                    echo -e "${YELLOW}fast-forward できない状態のため、安全のため更新をスキップしました。${NC}"
+                elif git -C "$LLAMA_CPP_REPO" pull --ff-only; then
+                    echo -e "${GREEN}llama.cpp をリモートの最新状態に更新しました。${NC}"
+                    llama_cpp_build_script="$(dirname -- "${BASH_SOURCE[0]}")/update-and-build-llama-cpp.sh"
+                    echo -e "llama.cpp をビルドする場合は次のコマンドを実行してください:"
+                    echo -e "${CYAN}bash \"$llama_cpp_build_script\"${NC}"
+                else
+                    echo -e "${RED}llama.cpp の fast-forward 更新に失敗しました。${NC}"
+                fi
             fi
         fi
-    else
-        echo -e "llama.cpp の更新をスキップしました。"
     fi
 fi
 
