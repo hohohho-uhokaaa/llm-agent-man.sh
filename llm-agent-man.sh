@@ -231,6 +231,7 @@ if value is not None and not isinstance(value, (dict, list)):
 ' "$json_key" "$body" 2>/dev/null
 }
 
+# GitHub Releases API から llama.cpp の最新リリースタグを取得する
 get_github_latest_release() {
     local response
     local status
@@ -352,6 +353,7 @@ fi
 LLAMA_CPP_REPO="/home/tomjerry/Projects/Sources/llama.cpp"
 echo ""
 echo -e "${YELLOW}[ llama.cpp Source Update ]${NC}"
+# llama.cpp の更新を利用者に確認し、タグが変わった場合は別スクリプトでのビルド方法を案内する
 if [ ! -d "$LLAMA_CPP_REPO/.git" ]; then
     echo -e "${RED}Git リポジトリが見つかりません: $LLAMA_CPP_REPO${NC}"
 else
